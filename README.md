@@ -1,0 +1,1 @@
+> This project utilises [eo-yaml](https://github.com/decorators-squad/eo-yaml) internally
