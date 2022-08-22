@@ -3,6 +3,7 @@ package fun.bb1.yaml;
 import static fun.bb1.exceptions.handler.ExceptionHandler.handle;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import com.amihaiemil.eoyaml.Scalar;
 import com.amihaiemil.eoyaml.YamlInput;
@@ -39,7 +40,7 @@ public final class Yaml {
 		}
 	}
 	
-	public final @NotNull IYamlElement recurse(@NotNull final YamlNode yamlNode) {
+	private final @NotNull IYamlElement recurse(@NotNull final YamlNode yamlNode) {
 		if (yamlNode instanceof Scalar scalar) return new YamlPrimitive(scalar.value()).setComment(scalar.comment().value());
 		if (yamlNode instanceof YamlMapping mapping) {
 			final YamlObject object = new YamlObject();
@@ -64,26 +65,30 @@ public final class Yaml {
 	
 	private final @NotNull YamlNode recurse(@NotNull final IYamlElement yamlElement) {
 		if (yamlElement instanceof YamlObject obj) {
-			final YamlMappingBuilder objBuilder = com.amihaiemil.eoyaml.Yaml.createYamlMappingBuilder();
+			YamlMappingBuilder objBuilder = com.amihaiemil.eoyaml.Yaml.createYamlMappingBuilder();
 			for (final YamlPrimitive objKey : obj) {
-				objBuilder.add(this.recurse(objKey), this.recurse(obj.get(objKey)));
+				objBuilder = objBuilder.add(this.recurse(objKey), this.recurse(obj.get(objKey))); // JUST WHY
 			}
-			return objBuilder.build(yamlElement.getComment());
+			return yamlElement.getComment().isEmpty() ? objBuilder.build() : objBuilder.build(yamlElement.getComment());
 		}
 		if (yamlElement instanceof YamlArray arr) {
-			final YamlSequenceBuilder arrBuilder = com.amihaiemil.eoyaml.Yaml.createYamlSequenceBuilder();
+			YamlSequenceBuilder arrBuilder = com.amihaiemil.eoyaml.Yaml.createYamlSequenceBuilder();
 			for (final IYamlElement arrElem : arr) {
-				arrBuilder.add(this.recurse(arrElem));
+				arrBuilder = arrBuilder.add(this.recurse(arrElem)); // weird impl thing??
 			}
-			return arrBuilder.build();
+			return arr.getComment().isEmpty() ? arrBuilder.build() : arrBuilder.build(arr.getComment());
 		}
-		// must be an array
-		final String[] strArr = yamlElement.getAsString().split("\\n");
-		final YamlScalarBuilder scalar = com.amihaiemil.eoyaml.Yaml.createYamlScalarBuilder();
-		for (final String str : strArr) {
-			scalar.addLine(str);
+		return buildForString(yamlElement.getAsString(), yamlElement.getComment());
+	}
+	
+	private final @NotNull Scalar buildForString(@NotNull final String str, @Nullable final String comment) {
+		final YamlScalarBuilder scalar = com.amihaiemil.eoyaml.Yaml.createYamlScalarBuilder().addLine(str);
+		if (comment == null || comment.isEmpty()) {
+			if (str.contains("\n")) return scalar.buildFoldedBlockScalar();
+			return scalar.buildPlainScalar();
 		}
-		return strArr.length > 1 ? scalar.buildFoldedBlockScalar(yamlElement.getComment()) : scalar.buildPlainScalar(yamlElement.getComment());
+		if (str.contains("\n")) return scalar.buildFoldedBlockScalar(comment);
+		return scalar.buildPlainScalar(comment, "");
 	}
 	
 }
